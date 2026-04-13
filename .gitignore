@@ -14,3 +14,7 @@ __generated__/
 coverage/
 *.log
 .DS_Store
+apps/api/app/__pycache__/
+*.pyc
+__pycache__/
+*.bak
