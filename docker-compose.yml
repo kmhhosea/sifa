@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=file:./prod.db
+      - JWT_SECRET=${JWT_SECRET:-sifa-production-secret-change-me}
+      - JWT_EXPIRES_IN=7d
+      - PORT=8000
+      - NODE_ENV=production
+      - FRONTEND_URL=*
+    volumes:
+      - backend-data:/app/prisma
+
+volumes:
+  backend-data:

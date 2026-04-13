@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== Users & Auth ====================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  displayName   String
+  role          String   @default("user") // user, admin, choir_leader
+  avatarUrl     String?
+  language      String   @default("sw") // sw, en
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  favorites     Favorite[]
+  downloads     Download[]
+  playlists     Playlist[]
+  generationJobs GenerationJob[]
+  settings      UserSetting[]
+
+  @@map("users")
+}
+
+model UserSetting {
+  id        String @id @default(cuid())
+  userId    String
+  key       String
+  value     String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@map("user_settings")
+}
+
+// ==================== Hymn Books & Songs ====================
+
+model HymnBook {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  shortName    String   @unique // TMW, TZR
+  description  String?
+  language     String   @default("sw")
+  totalSongs   Int
+  coverImageUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  songs        Song[]
+
+  @@map("hymn_books")
+}
+
+model Song {
+  id            String   @id @default(cuid())
+  hymnBookId    String
+  songNumber    Int
+  title         String
+  lyrics        String   // Full lyrics text
+  category      String?  // e.g., Ibada, Sala, Sifa, Tumaini
+  theme         String?  // e.g., worship, prayer, praise, hope
+  worshipContext String? // e.g., opening, communion, closing
+  language      String   @default("sw")
+  key           String?  // Musical key if known
+  timeSignature String?  // e.g., 4/4, 3/4
+  hasChorus     Boolean  @default(false)
+  verseCount    Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  hymnBook      HymnBook @relation(fields: [hymnBookId], references: [id])
+  favorites     Favorite[]
+  downloads     Download[]
+  referenceSources ReferenceSrc[]
+  generationJobs   GenerationJob[]
+  generatedAudios  GeneratedAudio[]
+  generatedVideos  GeneratedVideo[]
+  playlistItems    PlaylistItem[]
+  tags             SongTag[]
+
+  @@unique([hymnBookId, songNumber])
+  @@index([title])
+  @@index([category])
+  @@index([theme])
+  @@map("songs")
+}
+
+model SongTag {
+  id     String @id @default(cuid())
+  songId String
+  tag    String
+  song   Song   @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([songId, tag])
+  @@index([tag])
+  @@map("song_tags")
+}
+
+// ==================== Favorites & Downloads ====================
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  songId    String
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song      Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, songId])
+  @@map("favorites")
+}
+
+model Download {
+  id           String   @id @default(cuid())
+  userId       String
+  songId       String
+  type         String   // lyrics, audio, video
+  resourceId   String?  // ID of generated audio/video
+  filePath     String?
+  fileSize     Int?
+  status       String   @default("pending") // pending, downloading, completed, failed
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+
+  user         User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song         Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@map("downloads")
+}
+
+// ==================== Reference Sources ====================
+
+model ReferenceSrc {
+  id              String   @id @default(cuid())
+  songId          String
+  sourceType      String   // youtube, website, audio_archive
+  sourceUrl       String
+  title           String?
+  description     String?
+  confidenceScore Float    @default(0)
+  relevanceRank   Int      @default(0)
+  previewUrl      String?
+  thumbnailUrl    String?
+  duration        Int?     // seconds
+  isVerified      Boolean  @default(false)
+  metadata        String?  // JSON string for extra metadata
+  createdAt       DateTime @default(now())
+
+  song            Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@map("reference_sources")
+}
+
+// ==================== Generation ====================
+
+model GenerationJob {
+  id             String   @id @default(cuid())
+  userId         String
+  songId         String
+  type           String   // audio, video
+  status         String   @default("pending") // pending, processing, completed, failed
+  settings       String   // JSON: instruments, tempo, key, etc.
+  errorMessage   String?
+  progress       Int      @default(0) // 0-100
+  createdAt      DateTime @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  song           Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  generatedAudio GeneratedAudio?
+  generatedVideo GeneratedVideo?
+
+  @@index([userId])
+  @@index([songId])
+  @@index([status])
+  @@map("generation_jobs")
+}
+
+model GeneratedAudio {
+  id              String   @id @default(cuid())
+  jobId           String   @unique
+  songId          String
+  label           String   // e.g., "Sunday worship version"
+  fileUrl         String?
+  filePath        String?
+  fileSize        Int?
+  duration        Int?     // seconds
+  format          String   @default("mp3")
+  settings        String   // JSON: copy of generation settings
+  waveformData    String?  // JSON: for audio visualization
+  createdAt       DateTime @default(now())
+
+  job             GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  song            Song          @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@map("generated_audios")
+}
+
+model GeneratedVideo {
+  id              String   @id @default(cuid())
+  jobId           String   @unique
+  songId          String
+  label           String
+  fileUrl         String?
+  filePath        String?
+  fileSize        Int?
+  duration        Int?
+  format          String   @default("mp4")
+  aspectRatio     String   @default("9:16") // 9:16, 16:9
+  videoType       String   @default("lyric") // lyric, worship, practice
+  settings        String
+  createdAt       DateTime @default(now())
+
+  job             GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  song            Song          @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@index([songId])
+  @@map("generated_videos")
+}
+
+// ==================== Playlists ====================
+
+model Playlist {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  isServicePlan Boolean @default(false)
+  serviceDate DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       PlaylistItem[]
+
+  @@index([userId])
+  @@map("playlists")
+}
+
+model PlaylistItem {
+  id          String   @id @default(cuid())
+  playlistId  String
+  songId      String
+  position    Int
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  playlist    Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  song        Song     @relation(fields: [songId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, position])
+  @@map("playlist_items")
+}
+
+// ==================== Admin / Audit ====================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String   // create, update, delete, login, generate
+  resource   String   // song, user, generation, etc.
+  resourceId String?
+  details    String?  // JSON
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
