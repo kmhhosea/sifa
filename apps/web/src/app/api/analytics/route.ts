@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     const period = searchParams.get("period") || "30";
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const days = parseInt(period);
     const startDate = new Date();
@@ -36,6 +39,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.transaction.findMany({
         where: { businessId, createdAt: { gte: prevStartDate, lt: startDate }, type: "sale" },
+        include: { items: true },
       }),
       prisma.expense.findMany({
         where: { businessId, date: { gte: prevStartDate, lt: startDate } },
@@ -53,8 +57,12 @@ export async function GET(request: NextRequest) {
     const netProfit = grossProfit - totalExpenses;
 
     const prevRevenue = prevTransactions.reduce((sum, t) => sum + t.total, 0);
+    const prevCost = prevTransactions.reduce(
+      (sum, t) => sum + t.items.reduce((s, i) => s + i.costPrice * i.quantity, 0),
+      0
+    );
     const prevExpenseTotal = prevExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const prevProfit = prevRevenue - prevExpenseTotal;
+    const prevProfit = prevRevenue - prevCost - prevExpenseTotal;
 
     const revenueChange = prevRevenue === 0 ? 100 : ((totalRevenue - prevRevenue) / prevRevenue) * 100;
     const profitChange = prevProfit === 0 ? 100 : ((netProfit - prevProfit) / prevProfit) * 100;

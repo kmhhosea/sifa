@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     const unreadOnly = searchParams.get("unreadOnly") === "true";
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const where: Record<string, unknown> = { businessId, userId: session.userId };
     if (unreadOnly) where.isRead = false;
@@ -40,6 +43,11 @@ export async function PUT(request: NextRequest) {
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id, markAllRead, businessId } = await request.json();
+
+    if (businessId) {
+      const membership = await verifyBusinessMembership(session.userId, businessId);
+      if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
+    }
 
     if (markAllRead && businessId) {
       await prisma.notification.updateMany({

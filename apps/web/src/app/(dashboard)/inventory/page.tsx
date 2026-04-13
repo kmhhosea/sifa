@@ -16,7 +16,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Header } from "@/components/layout/header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthStore } from "@/stores/auth-store";
-import { useApi, apiPost, apiDelete } from "@/hooks/use-api";
+import { useApi, apiPost, apiPut, apiDelete } from "@/hooks/use-api";
 import { formatCurrency } from "@/lib/utils";
 
 interface Product {
@@ -235,7 +235,7 @@ function ProductDialog({
     setLoading(true);
     try {
       if (product) {
-        await apiPost("/api/products", { ...form, id: product.id, businessId, costPrice: Number(form.costPrice), sellingPrice: Number(form.sellingPrice), currentStock: Number(form.currentStock), reorderLevel: Number(form.reorderLevel) });
+        await apiPut("/api/products", { ...form, id: product.id, businessId, costPrice: Number(form.costPrice), sellingPrice: Number(form.sellingPrice), currentStock: Number(form.currentStock), reorderLevel: Number(form.reorderLevel) });
       } else {
         await apiPost("/api/products", { ...form, businessId, costPrice: Number(form.costPrice), sellingPrice: Number(form.sellingPrice), currentStock: Number(form.currentStock), reorderLevel: Number(form.reorderLevel) });
       }

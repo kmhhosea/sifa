@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +14,9 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get("endDate");
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const dateFilter: Record<string, unknown> = {};
     if (startDate) dateFilter.gte = new Date(startDate);

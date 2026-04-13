@@ -46,3 +46,15 @@ export async function getSession(): Promise<JWTPayload | null> {
   if (!token) return null;
   return verifyToken(token);
 }
+
+export async function verifyBusinessMembership(
+  userId: string,
+  businessId: string
+): Promise<{ role: string } | null> {
+  const prisma = (await import("./prisma")).default;
+  const member = await prisma.businessMember.findUnique({
+    where: { userId_businessId: { userId, businessId } },
+  });
+  if (!member) return null;
+  return { role: member.role };
+}

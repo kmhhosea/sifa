@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 import { expenseSchema } from "@/lib/validations";
 import { createAuditLog } from "@/lib/audit";
 
@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const where: Record<string, unknown> = { businessId };
     if (category) where.category = category;
@@ -47,6 +50,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { businessId, ...expenseData } = body;
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
+
     const parsed = expenseSchema.safeParse(expenseData);
 
     if (!parsed.success) {
@@ -93,6 +100,9 @@ export async function DELETE(request: NextRequest) {
     const businessId = searchParams.get("businessId");
 
     if (!id || !businessId) return NextResponse.json({ error: "Missing params" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     await prisma.expense.delete({ where: { id } });
 

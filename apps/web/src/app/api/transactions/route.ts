@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 import { transactionSchema } from "@/lib/validations";
 import { createAuditLog } from "@/lib/audit";
 
@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const where: Record<string, unknown> = { businessId };
     if (type) where.type = type;
@@ -50,6 +53,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { businessId, ...txData } = body;
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
+
     const parsed = transactionSchema.safeParse(txData);
 
     if (!parsed.success) {

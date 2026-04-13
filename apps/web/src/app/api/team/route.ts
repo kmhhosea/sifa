@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
@@ -12,6 +12,9 @@ export async function GET(request: NextRequest) {
     const businessId = searchParams.get("businessId");
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const members = await prisma.businessMember.findMany({
       where: { businessId },
@@ -37,6 +40,9 @@ export async function POST(request: NextRequest) {
     if (!businessId || !email || !role) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -80,6 +86,9 @@ export async function PUT(request: NextRequest) {
 
     const { id, role, businessId } = await request.json();
 
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
+
     const member = await prisma.businessMember.update({
       where: { id },
       data: { role },
@@ -114,6 +123,9 @@ export async function DELETE(request: NextRequest) {
     const businessId = searchParams.get("businessId");
 
     if (!id || !businessId) return NextResponse.json({ error: "Missing params" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     await prisma.businessMember.delete({ where: { id } });
 

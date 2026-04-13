@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { getSession } from "@/lib/auth";
+import { getSession, verifyBusinessMembership } from "@/lib/auth";
 import { stockEntrySchema } from "@/lib/validations";
 import { createAuditLog } from "@/lib/audit";
 
@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
 
     if (!businessId) return NextResponse.json({ error: "Business ID required" }, { status: 400 });
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
 
     const where: Record<string, unknown> = { businessId };
     if (productId) where.productId = productId;
@@ -48,6 +51,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { businessId, ...entryData } = body;
+
+    const membership = await verifyBusinessMembership(session.userId, businessId);
+    if (!membership) return NextResponse.json({ error: "Not a member of this business" }, { status: 403 });
+
     const parsed = stockEntrySchema.safeParse(entryData);
 
     if (!parsed.success) {
@@ -88,14 +95,14 @@ export async function POST(request: NextRequest) {
 
     // Check for low stock notification
     const product = await prisma.product.findUnique({ where: { id: productId } });
-    if (product && product.currentStock + stockChange <= product.reorderLevel) {
+    if (product && product.currentStock <= product.reorderLevel) {
       await prisma.notification.create({
         data: {
           businessId,
           userId: session.userId,
           type: "low_stock",
           title: "Low Stock Alert",
-          message: `${product.name} is running low (${product.currentStock + stockChange} ${product.unit} remaining)`,
+          message: `${product.name} is running low (${product.currentStock} ${product.unit} remaining)`,
         },
       });
     }
