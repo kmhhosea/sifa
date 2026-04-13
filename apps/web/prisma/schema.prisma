@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String
+  password        String
+  avatar          String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  businessMembers BusinessMember[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  expenses        Expense[]
+  transactions    Transaction[]
+  stockEntries    StockEntry[]
+}
+
+model Business {
+  id            String           @id @default(cuid())
+  name          String
+  description   String?
+  currency      String           @default("USD")
+  logo          String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  members       BusinessMember[]
+  products      Product[]
+  categories    Category[]
+  transactions  Transaction[]
+  expenses      Expense[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  stockEntries  StockEntry[]
+}
+
+model BusinessMember {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       String   @default("staff")
+  joinedAt   DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  name       String
+  businessId String
+  createdAt  DateTime  @default(now())
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@unique([name, businessId])
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  name             String
+  sku              String?
+  categoryId       String?
+  businessId       String
+  description      String?
+  costPrice        Float             @default(0)
+  sellingPrice     Float             @default(0)
+  currentStock     Int               @default(0)
+  reorderLevel     Int               @default(10)
+  unit             String            @default("pcs")
+  isActive         Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  category         Category?         @relation(fields: [categoryId], references: [id])
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  stockEntries     StockEntry[]
+  transactionItems TransactionItem[]
+}
+
+model StockEntry {
+  id              String   @id @default(cuid())
+  productId       String
+  businessId      String
+  quantity        Int
+  type            String
+  costPrice       Float    @default(0)
+  transportCost   Float    @default(0)
+  taxCost         Float    @default(0)
+  storageCost     Float    @default(0)
+  totalLandedCost Float    @default(0)
+  supplier        String?
+  notes           String?
+  userId          String
+  createdAt       DateTime @default(now())
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  businessId    String
+  userId        String
+  type          String            @default("sale")
+  status        String            @default("completed")
+  subtotal      Float             @default(0)
+  discount      Float             @default(0)
+  tax           Float             @default(0)
+  total         Float             @default(0)
+  amountPaid    Float             @default(0)
+  paymentMethod String            @default("cash")
+  customerName  String?
+  customerPhone String?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id])
+  items         TransactionItem[]
+}
+
+model TransactionItem {
+  id            String      @id @default(cuid())
+  transactionId String
+  productId     String
+  quantity      Int
+  unitPrice     Float
+  costPrice     Float       @default(0)
+  discount      Float       @default(0)
+  total         Float
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product       Product     @relation(fields: [productId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  businessId  String
+  userId      String
+  category    String
+  amount      Float
+  description String
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String
+  action     String
+  entity     String
+  entityId   String?
+  details    String?
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  businessId String
+  userId     String
+  type       String
+  title      String
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+}
